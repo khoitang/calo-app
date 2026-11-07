@@ -114,8 +114,7 @@ async function seedAdmin() {
 initDb()
   .then(() => seedAdmin().catch(console.error))
   .catch((err) => {
-    console.error('[db] init failed:', err.message)
-    process.exit(1)
+    console.error('[db] init failed (server vẫn chạy, các API sẽ báo lỗi nếu DB không sẵn sàng):', err.message)
   })
 
 // Wrapper helpers giống kiểu query cũ của SQLite (db.get / db.all / db.run)
@@ -255,11 +254,15 @@ function rateLimit(req, bucket, max = 25, windowMs = 15 * 60 * 1000) {
 }
 
 setInterval(async () => {
-  const now = Date.now()
-  for (const [key, entry] of attempts) {
-    if (entry.resetAt < now) attempts.delete(key)
+  try {
+    const now = Date.now()
+    for (const [key, entry] of attempts) {
+      if (entry.resetAt < now) attempts.delete(key)
+    }
+    await db.run('DELETE FROM sessions WHERE expires_at < ?', [now])
+  } catch {
+    // DB chưa sẵn sàng: bỏ qua, sẽ dọn dẹp sau khi kết nối lại.
   }
-  await db.run('DELETE FROM sessions WHERE expires_at < ?', [now])
 }, 60 * 60 * 1000).unref()
 
 function validateEmail(value) {
